@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ZakuBot/bot"
 	"github.com/joho/godotenv"
 	"log"
 	"os"
@@ -12,4 +13,5 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 	botToken := os.Getenv("BOT_TOKEN")
+	bot.Run(botToken)
 }
