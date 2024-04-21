@@ -8,7 +8,12 @@ It uses a MongoDB database to access characters. It's based on the discordgo lib
 
 ## Getting Started
 
-
+### Dependencies
+* The bot needs a local.env file with your discord bot token.
+```
+BOT_TOKEN=<YOUR_DISCORD_BOT_TOKEN>
+```
+* The bot needs a MongoDB database running on localhost:27017
 ### Executing program
 
 * Just run the main.go file
