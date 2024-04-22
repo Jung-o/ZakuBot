@@ -52,10 +52,18 @@ func receivedMessage(discord *discordgo.Session, message *discordgo.MessageCreat
 		return
 	}
 
-	// respond to user message if it contains `!help` or `!bye`
+	// respond to user message if it matches a case
 	switch {
 	case strings.Contains(message.Content, "zreg"):
 		response := register(message.Author.ID)
 		discord.ChannelMessageSend(message.ChannelID, response)
+	case strings.Contains(message.Content, "zd"):
+		cardsDrawnPath, err := drawCards()
+		if err != nil {
+			discord.ChannelMessageSend(message.ChannelID, "Error drawing cards")
+		}
+		file, _ := os.Open(cardsDrawnPath)
+		defer file.Close()
+		discord.ChannelFileSend(message.ChannelID, "cards.png", file)
 	}
 }
