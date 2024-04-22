@@ -18,7 +18,7 @@ func Run(BotToken string) {
 		return
 	}
 
-	// add a event handler
+	// add an event handler
 	discord.AddHandler(receivedMessage)
 
 	// In this example, we only care about receiving message events.
@@ -55,7 +55,7 @@ func receivedMessage(discord *discordgo.Session, message *discordgo.MessageCreat
 	// respond to user message if it contains `!help` or `!bye`
 	switch {
 	case strings.Contains(message.Content, "zreg"):
-		response := "You have been registered successfully!"
+		response := register(message.Author.ID)
 		discord.ChannelMessageSend(message.ChannelID, response)
 	}
 }
