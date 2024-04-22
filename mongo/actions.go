@@ -13,7 +13,7 @@ var usersColl = db.Collection("Users")
 var inventoriesColl = db.Collection("Inventories")
 var cardsColl = db.Collection("Cards")
 
-func registerUser(userID string) string {
+func RegisterUser(userID string) string {
 	userDoc := bson.M{"userID": userID}
 	err := usersColl.FindOne(ctx, userDoc).Decode(&userDoc)
 	if err != nil {
