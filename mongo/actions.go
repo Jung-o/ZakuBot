@@ -10,12 +10,12 @@ import (
 var client = NewMongoClient()
 var db = client.Database("ZakuBot")
 var usersColl = db.Collection("Users")
-var inventoriesColl = db.Collection("Inventories")
-var cardsColl = db.Collection("Cards")
+var charactersColl = db.Collection("Characters")
+var artworksColl = db.Collection("Artworks")
 
 func RegisterUser(userID string) string {
-	userDoc := bson.M{"userID": userID}
-	err := usersColl.FindOne(ctx, userDoc).Decode(&userDoc)
+	var userDoc bson.M
+	err := usersColl.FindOne(ctx, bson.M{"userID": userID}).Decode(&userDoc)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			_, err := usersColl.InsertOne(ctx, userDoc)
@@ -28,4 +28,34 @@ func RegisterUser(userID string) string {
 		}
 	}
 	return "User already exists"
+}
+
+func DrawCards() ([]bson.M, error) {
+	pipeline := mongo.Pipeline{
+		{{"$match", bson.D{{"owned", false}}}},
+		{{"$group", bson.D{{"_id", "$characterId"}, {"doc", bson.D{{"$first", "$$ROOT"}}}}}},
+		{{"$sample", bson.D{{"size", 3}}}},
+	}
+
+	cursor, err := artworksColl.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	if err = cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func GetCharInfos(characterId string) (bson.M, error) {
+	var character bson.M
+	err := charactersColl.FindOne(ctx, bson.M{"characterId": characterId}).Decode(&character)
+	if err != nil {
+		return nil, err
+	}
+	return character, nil
 }
