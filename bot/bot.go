@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -58,12 +59,14 @@ func receivedMessage(discord *discordgo.Session, message *discordgo.MessageCreat
 		response := register(message.Author.ID)
 		discord.ChannelMessageSend(message.ChannelID, response)
 	case strings.Contains(message.Content, "zd"):
-		cardsDrawnPath, err := drawCards()
+		combinedImgPath, err := combinedCardsFile()
 		if err != nil {
 			discord.ChannelMessageSend(message.ChannelID, "Error drawing cards")
 		}
-		file, _ := os.Open(cardsDrawnPath)
-		defer file.Close()
-		discord.ChannelFileSend(message.ChannelID, "cards.png", file)
+		combinedImageFile, err := os.Open(combinedImgPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		discord.ChannelFileSend(message.ChannelID, "cards.png", combinedImageFile)
 	}
 }

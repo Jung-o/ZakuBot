@@ -33,72 +33,34 @@ var vignetteImagePaths = map[color.Color]string{
 
 // CombineDrawnCards downloads the images of the drawn cards, adds a vignette based on the average color of the image,
 // writes the character's name and series on the image and combines them into a single image
-func CombineDrawnCards(imagesInfo []bson.M) string {
+func CombineDrawnCards(imagesInfo []bson.M) image.Image {
 	images := make([]image.Image, len(imagesInfo))
 	for i, card := range imagesInfo {
 		doc := card["doc"].(primitive.M)
-		characterId := doc["characterId"].(string)
 		artworkId := doc["_id"].(primitive.ObjectID).Hex()
-		characterInfos, err := mongo.GetCharInfos(characterId)
-		if err != nil {
-			log.Fatal(err)
-		}
-
+		characterId := doc["characterId"].(string)
 		// Construct the path to the image file
 		imagePath := fmt.Sprintf("files/cards/%s.jpg", artworkId)
-		downloadMissingImage(imagePath, doc["artworkUrl"].(string))
-		img := openImage(imagePath)
-
-		vignettedImage, err := addVignetteBasedOnAverageColor(img)
-		if err != nil {
+		artworkUrl := doc["artworkUrl"].(string)
+		_, err := os.Stat(imagePath)
+		if os.IsNotExist(err) {
+			// File does not exist, run processImage
+			imgRGBA := processImage(artworkId, artworkUrl, characterId)
+			images[i] = imgRGBA
+		} else if err != nil {
+			// Another error occurred
 			log.Fatal(err)
-		}
-
-		// Convert image to RGBA
-		imgRGBA := image.NewRGBA(vignettedImage.Bounds())
-		draw.Draw(imgRGBA, imgRGBA.Bounds(), vignettedImage, image.Point{}, draw.Src)
-
-		// Add character's name and series to the image
-		name := characterInfos["name"].(string)
-		series := characterInfos["series"].(string)
-		addLabel(imgRGBA, name, series)
-		images[i] = imgRGBA
-	}
-
-	width := 0
-	height := 0
-	for _, img := range images {
-		width += img.Bounds().Dx()
-		if h := img.Bounds().Dy(); h > height {
-			height = h
+		} else {
+			// File exists, open it
+			imgRGBA, err := openImage(imagePath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			images[i] = imgRGBA
 		}
 	}
-	combined := image.NewRGBA(image.Rect(0, 0, width, height))
 
-	x := 0
-	for _, img := range images {
-		draw.Draw(combined, image.Rect(x, 0, x+img.Bounds().Dx(), height), img, image.Point{}, draw.Src)
-		x += img.Bounds().Dx()
-	}
-
-	combinedFilePath := "files/combined.jpg"
-	file, err := os.Create(combinedFilePath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}(file)
-
-	err = jpeg.Encode(file, combined, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return combinedFilePath
+	return combineImages(images)
 }
 
 func addLabel(img *image.RGBA, name string, series string) {
@@ -253,17 +215,76 @@ func downloadMissingImage(filePath string, artworkUrl string) {
 	}
 }
 
-func openImage(filePath string) image.Image {
+func openImage(filePath string) (image.Image, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	defer file.Close()
 
 	img, _, err := image.Decode(file)
 	if err != nil {
+		return nil, err
+	}
+
+	return img, nil
+}
+
+func processImage(artworkId string, artworkUrl string, characterId string) *image.RGBA {
+	// Construct the path to the image file
+	imagePath := fmt.Sprintf("files/cards/%s.jpg", artworkId)
+	downloadMissingImage(imagePath, artworkUrl)
+	img, err := openImage(imagePath)
+
+	vignettedImage, err := addVignetteBasedOnAverageColor(img)
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	return img
+	// Convert image to RGBA
+	imgRGBA := image.NewRGBA(vignettedImage.Bounds())
+	draw.Draw(imgRGBA, imgRGBA.Bounds(), vignettedImage, image.Point{}, draw.Src)
+
+	// Add character's name and series to the image
+	characterInfos, err := mongo.GetCharInfos(characterId)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	name := characterInfos["name"].(string)
+	series := characterInfos["series"].(string)
+	addLabel(imgRGBA, name, series)
+
+	// Save the image to the file
+	file, err := os.Create(imagePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	err = jpeg.Encode(file, imgRGBA, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return imgRGBA
+}
+
+func combineImages(images []image.Image) image.Image {
+	width := 0
+	height := 0
+	for _, img := range images {
+		width += img.Bounds().Dx()
+		if h := img.Bounds().Dy(); h > height {
+			height = h
+		}
+	}
+	combined := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	x := 0
+	for _, img := range images {
+		draw.Draw(combined, image.Rect(x, 0, x+img.Bounds().Dx(), height), img, image.Point{}, draw.Src)
+		x += img.Bounds().Dx()
+	}
+
+	return combined
 }
