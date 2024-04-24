@@ -2,6 +2,7 @@ package bot
 
 import (
 	"ZakuBot/mongo"
+	"fmt"
 	"github.com/nfnt/resize"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -13,7 +14,6 @@ import (
 	"image/color"
 	"image/draw"
 	"image/jpeg"
-	"io"
 	"log"
 	"math"
 	"net/http"
@@ -38,35 +38,26 @@ func CombineDrawnCards(imagesInfo []bson.M) string {
 	for i, card := range imagesInfo {
 		doc := card["doc"].(primitive.M)
 		characterId := doc["characterId"].(string)
+		artworkId := doc["_id"].(primitive.ObjectID).Hex()
 		characterInfos, err := mongo.GetCharInfos(characterId)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		// Download the images
-		artworkUrl := doc["artworkUrl"].(string)
-		resp, err := http.Get(artworkUrl)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer func(Body io.ReadCloser) {
-			err := Body.Close()
-			if err != nil {
+		// Construct the path to the image file
+		imagePath := fmt.Sprintf("files/cards/%s.jpg", artworkId)
+		downloadMissingImage(imagePath, doc["artworkUrl"].(string))
+		img := openImage(imagePath)
 
-			}
-		}(resp.Body)
-
-		img, _, err := image.Decode(resp.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
 		vignettedImage, err := addVignetteBasedOnAverageColor(img)
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		// Convert image to RGBA
 		imgRGBA := image.NewRGBA(vignettedImage.Bounds())
 		draw.Draw(imgRGBA, imgRGBA.Bounds(), vignettedImage, image.Point{}, draw.Src)
+
 		// Add character's name and series to the image
 		name := characterInfos["name"].(string)
 		series := characterInfos["series"].(string)
@@ -90,8 +81,8 @@ func CombineDrawnCards(imagesInfo []bson.M) string {
 		x += img.Bounds().Dx()
 	}
 
-	filePath := "files/combined.jpg"
-	file, err := os.Create(filePath)
+	combinedFilePath := "files/combined.jpg"
+	file, err := os.Create(combinedFilePath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -107,7 +98,7 @@ func CombineDrawnCards(imagesInfo []bson.M) string {
 		log.Fatal(err)
 	}
 
-	return filePath
+	return combinedFilePath
 }
 
 func addLabel(img *image.RGBA, name string, series string) {
@@ -232,4 +223,47 @@ func closestColor(colors map[color.Color]string, target color.Color) string {
 	}
 
 	return colors[closestColor]
+}
+
+func downloadMissingImage(filePath string, artworkUrl string) {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// Download the images
+		resp, err := http.Get(artworkUrl)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		img, _, err := image.Decode(resp.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Save the image to the file
+		file, err := os.Create(filePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer file.Close()
+
+		err = jpeg.Encode(file, img, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func openImage(filePath string) image.Image {
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	img, _, err := image.Decode(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return img
 }
