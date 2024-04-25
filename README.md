@@ -15,9 +15,12 @@ BOT_TOKEN=<YOUR_DISCORD_BOT_TOKEN>
 ```
 * The bot needs a MongoDB database running on localhost:27017
 ### Executing program
+* Download all the dependencies
+```
+go get -d ./...
+```
 
-* Just run the main.go file
-
+* Then run the main.go file
 ```
 go run main.go
 ```
