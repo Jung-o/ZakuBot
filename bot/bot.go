@@ -1,6 +1,8 @@
 package bot
 
 import (
+	"ZakuBot/bot/commands"
+	"ZakuBot/mongo"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"log"
@@ -8,7 +10,15 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 )
+
+type DropMessageInfo struct {
+	MessageID string
+	UserID    string
+}
+
+var trackedMessages = make(map[string]DropMessageInfo)
 
 func Run(BotToken string) {
 
@@ -22,8 +32,10 @@ func Run(BotToken string) {
 	// add an event handler
 	discord.AddHandler(receivedMessage)
 
-	// In this example, we only care about receiving message events.
-	discord.Identify.Intents = discordgo.IntentsGuildMessages
+	// Add a handler for the MessageReactionAdd event
+	discord.AddHandler(addedReaction)
+
+	discord.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsGuildMessageReactions
 
 	// open session
 	err = discord.Open()
@@ -46,27 +58,85 @@ func Run(BotToken string) {
 
 }
 
-func receivedMessage(discord *discordgo.Session, message *discordgo.MessageCreate) {
+func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreate) {
 
 	// prevent bot responding to its own messages
-	if message.Author.ID == discord.State.User.ID {
+	if message.Author.ID == session.State.User.ID {
 		return
 	}
 
 	// respond to user message if it matches a case
 	switch {
 	case strings.Contains(message.Content, "zreg"):
-		response := register(message.Author.ID)
-		discord.ChannelMessageSend(message.ChannelID, response)
+		response := commands.Register(message.Author.ID, message.Author.GlobalName)
+		session.ChannelMessageSend(message.ChannelID, response)
+
 	case strings.Contains(message.Content, "zd"):
-		combinedImgPath, err := combinedCardsFile()
+		cards, err := mongo.DrawCards()
 		if err != nil {
-			discord.ChannelMessageSend(message.ChannelID, "Error drawing cards")
+			session.ChannelMessageSend(message.ChannelID, "Error drawing cards")
+		}
+		combinedImgPath, err := commands.CombinedCardsFile(cards)
+		if err != nil {
+			log.Fatal(err)
 		}
 		combinedImageFile, err := os.Open(combinedImgPath)
 		if err != nil {
 			log.Fatal(err)
 		}
-		discord.ChannelFileSend(message.ChannelID, "cards.png", combinedImageFile)
+		messageToSend := discordgo.MessageSend{
+			Content: fmt.Sprintf("<@%s>, Here is your drop.", message.Author.ID),
+			Files: []*discordgo.File{
+				{
+					Reader: combinedImageFile,
+					Name:   "cards.png",
+				},
+			},
+		}
+		sentMessage, _ := session.ChannelMessageSendComplex(message.ChannelID, &messageToSend)
+
+		// Add reactions to the message
+		emojis := []string{"1️⃣", "2️⃣", "3️⃣"}
+		for _, emoji := range emojis {
+			session.MessageReactionAdd(sentMessage.ChannelID, sentMessage.ID, emoji)
+		}
+		// Track the message
+		trackedMessages[sentMessage.ID] = DropMessageInfo{MessageID: sentMessage.ID, UserID: message.Author.ID}
+
+		time.AfterFunc(15*time.Second, func() {
+			delete(trackedMessages, sentMessage.ID)
+
+			// Remove bot reaction before drawing winners
+			for _, emoji := range emojis {
+				session.MessageReactionRemove(sentMessage.ChannelID, sentMessage.ID, emoji, sentMessage.Author.ID)
+			}
+
+			winners := commands.ChooseWinners(session, sentMessage, message.Author.ID, cards)
+			commands.AddDropsToInventories(winners)
+			commands.NotifyWinners(session, sentMessage.ChannelID, winners)
+
+			// Remove all reactions and change drop message
+			commands.MessageCleanup(session, sentMessage)
+		})
+	}
+}
+
+func addedReaction(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
+	// Check if the reaction is made by the bot
+	if m.UserID == s.State.User.ID {
+		return
+	}
+	// Check if the reaction is on a tracked message
+	_, ok := trackedMessages[m.MessageID]
+	if ok {
+		// Define the emojis
+		emojis := []string{"1️⃣", "2️⃣", "3️⃣"}
+
+		// Remove the other reactions
+		for _, emoji := range emojis {
+			if emoji != m.Emoji.Name {
+				s.MessageReactionRemove(m.ChannelID, m.MessageID, emoji, m.UserID)
+			}
+		}
 	}
 }

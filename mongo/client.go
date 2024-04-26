@@ -7,7 +7,7 @@ import (
 	"log"
 )
 
-var ctx = context.TODO()
+var ctx = context.Background()
 
 func NewMongoClient() *mongo.Client {
 	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017/")
