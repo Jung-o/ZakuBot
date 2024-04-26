@@ -13,11 +13,15 @@ var usersColl = db.Collection("Users")
 var charactersColl = db.Collection("Characters")
 var artworksColl = db.Collection("Artworks")
 
-func RegisterUser(userID string) string {
+func RegisterUser(userID string, userName string) string {
 	var userDoc bson.M
-	err := usersColl.FindOne(ctx, bson.M{"userID": userID}).Decode(&userDoc)
+	err := usersColl.FindOne(ctx, bson.M{"userId": userID}).Decode(&userDoc)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
+			userDoc = bson.M{
+				"userId": userID, "userName": userName, "money": 0,
+				"inventory": []string{}, "wishlist": []string{},
+			}
 			_, err := usersColl.InsertOne(ctx, userDoc)
 			if err != nil {
 				log.Fatal(err)
@@ -27,12 +31,13 @@ func RegisterUser(userID string) string {
 			log.Fatal(err)
 		}
 	}
+	updatedUserDoc := bson.M{"$set": bson.M{"userName": userName}}
+	_, err = usersColl.UpdateOne(ctx, bson.M{"userId": userID}, updatedUserDoc)
 	return "User already exists"
 }
 
 func DrawCards() ([]bson.M, error) {
 	pipeline := mongo.Pipeline{
-		{{"$match", bson.D{{"owned", false}}}},
 		{{"$group", bson.D{{"_id", "$characterId"}, {"doc", bson.D{{"$first", "$$ROOT"}}}}}},
 		{{"$sample", bson.D{{"size", 3}}}},
 	}
@@ -58,4 +63,44 @@ func GetCharInfos(characterId string) (bson.M, error) {
 		return nil, err
 	}
 	return character, nil
+}
+
+func GetArtworkInfos(artworkId string) (bson.M, error) {
+	var artwork bson.M
+	err := artworksColl.FindOne(ctx, bson.M{"artworkId": artworkId}).Decode(&artwork)
+	if err != nil {
+		return nil, err
+	}
+	return artwork, nil
+}
+
+func AddToInventory(userID string, characterID string, artworkID string) {
+	var userDoc bson.M
+	err := usersColl.FindOne(ctx, bson.M{"userId": userID}).Decode(&userDoc)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Add artwork to user's inventory
+	userFilter := bson.M{"userId": userID}
+	userUpdateDoc := bson.M{"$push": bson.M{"inventory": artworkID}}
+	_, err = usersColl.UpdateOne(ctx, userFilter, userUpdateDoc)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Add user to artwork's owners
+	artworkFilter := bson.M{"artworkId": artworkID}
+	artworkUpdateDoc := bson.M{"$push": bson.M{"owners": userID}}
+	_, err = artworksColl.UpdateOne(ctx, artworkFilter, artworkUpdateDoc)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Add user to character's owners
+	characterFilter := bson.M{"characterId": characterID}
+	characterUpdateDoc := bson.M{"$push": bson.M{"owners": userID}}
+	_, err = charactersColl.UpdateOne(ctx, characterFilter, characterUpdateDoc)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

@@ -1,8 +1,9 @@
-package bot
+package commands
 
 import (
 	"ZakuBot/mongo"
 	"fmt"
+	"github.com/bwmarrin/discordgo"
 	"github.com/nfnt/resize"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -16,8 +17,10 @@ import (
 	"image/jpeg"
 	"log"
 	"math"
+	"math/rand"
 	"net/http"
 	"os"
+	"time"
 )
 
 var vignetteImagePaths = map[color.Color]string{
@@ -31,9 +34,33 @@ var vignetteImagePaths = map[color.Color]string{
 	color.RGBA{R: 254, G: 255, B: 137, A: 255}: "files/banners/yellow.png",
 }
 
-// CombineDrawnCards downloads the images of the drawn cards, adds a vignette based on the average color of the image,
+type DropWin struct {
+	winnerID      string
+	artworkID     string
+	characterID   string
+	characterName string
+	opponents     int
+}
+
+func CombinedCardsFile(cards []bson.M) (string, error) {
+	// Create a new file
+	filepath := "files/combined.jpg"
+	file, err := os.Create(filepath)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	combinedImg := combineDrawnCards(cards)
+	// Encode (write) the image to the file
+	if err := jpeg.Encode(file, combinedImg, nil); err != nil {
+		panic(err)
+	}
+	return filepath, nil
+}
+
+// combineDrawnCards downloads the images of the drawn cards, adds a vignette based on the average color of the image,
 // writes the character's name and series on the image and combines them into a single image
-func CombineDrawnCards(imagesInfo []bson.M) image.Image {
+func combineDrawnCards(imagesInfo []bson.M) image.Image {
 	images := make([]image.Image, len(imagesInfo))
 	for i, card := range imagesInfo {
 		doc := card["doc"].(primitive.M)
@@ -287,4 +314,98 @@ func combineImages(images []image.Image) image.Image {
 	}
 
 	return combined
+}
+
+func MessageCleanup(session *discordgo.Session, message *discordgo.Message) {
+	session.MessageReactionsRemoveAll(message.ChannelID, message.ID)
+	session.ChannelMessageEdit(message.ChannelID, message.ID,
+		fmt.Sprintf("These cards can't be dropped anymore."))
+}
+
+func getUsersWhoReacted(session *discordgo.Session, channelID string, messageID string, emoji string) ([]string, error) {
+	var users []string
+
+	lastID := ""
+
+	for {
+		partialUsers, err := session.MessageReactions(channelID, messageID, emoji, 100, "", lastID)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(partialUsers) == 0 {
+			break
+		}
+
+		lastID = partialUsers[len(partialUsers)-1].ID
+		users = append(users, lastID)
+	}
+
+	return users, nil
+}
+
+func stringInSlice(str string, list []string) bool {
+	for _, v := range list {
+		if v == str {
+			return true
+		}
+	}
+	return false
+}
+
+func ChooseWinners(session *discordgo.Session, cardsMessage *discordgo.Message, authorID string, cards []bson.M) []DropWin {
+	var winners []DropWin
+	emojis := []string{"1️⃣", "2️⃣", "3️⃣"}
+	for i, card := range cards {
+		var winner DropWin
+		emoji := emojis[i]
+		cardID := card["doc"].(primitive.M)["artworkId"].(string)
+		winner.characterID = card["doc"].(primitive.M)["characterId"].(string)
+		characterInfos, err := mongo.GetCharInfos(winner.characterID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		winner.characterName = characterInfos["name"].(string)
+		winner.artworkID = cardID
+		users, err := getUsersWhoReacted(session, cardsMessage.ChannelID, cardsMessage.ID, emoji)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if len(users) == 0 {
+			continue
+		}
+		if stringInSlice(authorID, users) {
+			winner.winnerID = authorID
+		} else {
+			rand.New(rand.NewSource(time.Now().UnixNano())) // Initialize the random number generator
+			winnerID := users[rand.Intn(len(users))]
+			winner.winnerID = winnerID
+			winner.opponents = len(users) - 1
+		}
+		winners = append(winners, winner)
+	}
+	return winners
+}
+
+func NotifyWinners(session *discordgo.Session, channelID string, winners []DropWin) {
+	for _, dropWin := range winners {
+		charName := dropWin.characterName
+		winnerID := dropWin.winnerID
+		opponents := dropWin.opponents
+		if opponents > 0 {
+			session.ChannelMessageSend(channelID, fmt.Sprintf("<@%s> beat %d opponents and won **%s**",
+				winnerID, opponents, charName))
+		} else {
+			session.ChannelMessageSend(channelID, fmt.Sprintf("<@%s> dropped **%s**", winnerID, charName))
+		}
+	}
+}
+
+func AddDropsToInventories(winners []DropWin) {
+	for _, dropWin := range winners {
+		userID := dropWin.winnerID
+		artworkID := dropWin.artworkID
+		characterID := dropWin.characterID
+		mongo.AddToInventory(userID, characterID, artworkID)
+	}
 }
