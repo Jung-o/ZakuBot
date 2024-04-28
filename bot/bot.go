@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -66,12 +65,12 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 	}
 
 	// respond to user message if it matches a case
-	switch {
-	case strings.Contains(message.Content, "zreg"):
+	switch message.Content {
+	case "zreg", "zregister":
 		response := commands.Register(message.Author.ID, message.Author.GlobalName)
 		session.ChannelMessageSend(message.ChannelID, response)
 
-	case strings.Contains(message.Content, "zd"):
+	case "zd", "zdrop", "zdraw":
 		cards, err := mongo.DrawCards()
 		if err != nil {
 			session.ChannelMessageSend(message.ChannelID, "Error drawing cards")
