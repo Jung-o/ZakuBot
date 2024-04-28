@@ -1,6 +1,7 @@
 package mongo
 
 import (
+	"context"
 	"errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -20,7 +21,7 @@ func RegisterUser(userID string, userName string) string {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			userDoc = bson.M{
 				"userId": userID, "userName": userName, "money": 0,
-				"inventory": []string{}, "wishlist": []string{},
+				"inventory": map[string]int{}, "wishlist": []string{},
 			}
 			_, err := usersColl.InsertOne(ctx, userDoc)
 			if err != nil {
@@ -42,7 +43,7 @@ func DrawCards() ([]bson.M, error) {
 		{{"$sample", bson.D{{"size", 3}}}},
 	}
 
-	cursor, err := artworksColl.Aggregate(ctx, pipeline)
+	cursor, err := charactersColl.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
@@ -65,33 +66,41 @@ func GetCharInfos(characterId string) (bson.M, error) {
 	return character, nil
 }
 
-func GetArtworkInfos(artworkId string) (bson.M, error) {
+func GetArtworkInfos(characterId string, artworkId int) (bson.M, error) {
 	var artwork bson.M
-	err := artworksColl.FindOne(ctx, bson.M{"artworkId": artworkId}).Decode(&artwork)
+	err := artworksColl.FindOne(ctx, bson.M{"characterId": characterId, "artworkId": artworkId}).Decode(&artwork)
 	if err != nil {
 		return nil, err
 	}
 	return artwork, nil
 }
 
-func AddToInventory(userID string, characterID string, artworkID string) {
+func GetAllArtworks(characterId string) ([]bson.M, error) {
+	var artworks []bson.M
+	cursor, err := artworksColl.Find(context.Background(), bson.M{"characterId": characterId})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.Background())
+
+	err = cursor.All(context.Background(), &artworks)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return artworks, nil
+}
+
+func AddToInventory(userID string, characterID string, artworkID int) {
 	var userDoc bson.M
 	err := usersColl.FindOne(ctx, bson.M{"userId": userID}).Decode(&userDoc)
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Add artwork to user's inventory
+	// Add card with specific artwork ID to user's inventory
 	userFilter := bson.M{"userId": userID}
-	userUpdateDoc := bson.M{"$push": bson.M{"inventory": artworkID}}
+	userUpdateDoc := bson.M{"$set": bson.M{"inventory." + characterID: artworkID}}
 	_, err = usersColl.UpdateOne(ctx, userFilter, userUpdateDoc)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Add user to artwork's owners
-	artworkFilter := bson.M{"artworkId": artworkID}
-	artworkUpdateDoc := bson.M{"$push": bson.M{"owners": userID}}
-	_, err = artworksColl.UpdateOne(ctx, artworkFilter, artworkUpdateDoc)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -103,4 +112,13 @@ func AddToInventory(userID string, characterID string, artworkID string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func GetUser(userID string) (bson.M, error) {
+	var user bson.M
+	err := usersColl.FindOne(ctx, bson.M{"userId": userID}).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
 }

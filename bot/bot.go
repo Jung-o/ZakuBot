@@ -71,6 +71,12 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 		session.ChannelMessageSend(message.ChannelID, response)
 
 	case "zd", "zdrop", "zdraw":
+
+		//Make sure user is registered
+		if !commands.IsRegistered(message.Author.ID) {
+			session.ChannelMessageSend(message.ChannelID, "You must register first. Type `zreg` to register.")
+			return
+		}
 		cards, err := mongo.DrawCards()
 		if err != nil {
 			session.ChannelMessageSend(message.ChannelID, "Error drawing cards")
