@@ -12,6 +12,7 @@
 
 - [ ] List all cards in inventory (properly with pagination)
 - [ ] View collection of other user
+- [ ] Change artwork of a card
 
 ### `commands/zview.go`
 - [ ] View card details
