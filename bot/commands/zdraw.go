@@ -6,7 +6,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/nfnt/resize"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/font/sfnt"
@@ -36,7 +35,6 @@ var vignetteImagePaths = map[color.Color]string{
 
 type DropWin struct {
 	winnerID      string
-	artworkID     string
 	characterID   string
 	characterName string
 	opponents     int
@@ -63,16 +61,16 @@ func CombinedCardsFile(cards []bson.M) (string, error) {
 func combineDrawnCards(imagesInfo []bson.M) image.Image {
 	images := make([]image.Image, len(imagesInfo))
 	for i, card := range imagesInfo {
-		doc := card["doc"].(primitive.M)
-		artworkId := doc["_id"].(primitive.ObjectID).Hex()
-		characterId := doc["characterId"].(string)
+		characterId := card["_id"].(string)
+		imageName := characterId + "-1"
 		// Construct the path to the image file
-		imagePath := fmt.Sprintf("files/cards/%s.jpg", artworkId)
-		artworkUrl := doc["artworkUrl"].(string)
-		_, err := os.Stat(imagePath)
+		imagePath := fmt.Sprintf("files/cards/%s.jpg", imageName)
+		artworkInfos, err := mongo.GetArtworkInfos(characterId, 1)
+		artworkUrl := artworkInfos["artworkUrl"].(string)
+		_, err = os.Stat(imagePath)
 		if os.IsNotExist(err) {
 			// File does not exist, run processImage
-			imgRGBA := processImage(artworkId, artworkUrl, characterId)
+			imgRGBA := processImage(characterId, 1, artworkUrl)
 			images[i] = imgRGBA
 		} else if err != nil {
 			// Another error occurred
@@ -219,12 +217,18 @@ func downloadMissingImage(filePath string, artworkUrl string) {
 		// Download the images
 		resp, err := http.Get(artworkUrl)
 		if err != nil {
+			fmt.Println("Error downloading image")
+			fmt.Println(artworkUrl)
+			fmt.Println(filePath)
 			log.Fatal(err)
 		}
 		defer resp.Body.Close()
 
 		img, _, err := image.Decode(resp.Body)
 		if err != nil {
+			fmt.Println("Error decoding image")
+			fmt.Println(artworkUrl)
+			fmt.Println(filePath)
 			log.Fatal(err)
 		}
 
@@ -237,6 +241,9 @@ func downloadMissingImage(filePath string, artworkUrl string) {
 
 		err = jpeg.Encode(file, img, nil)
 		if err != nil {
+			fmt.Println("Error encoding image")
+			fmt.Println(artworkUrl)
+			fmt.Println(filePath)
 			log.Fatal(err)
 		}
 	}
@@ -257,9 +264,10 @@ func openImage(filePath string) (image.Image, error) {
 	return img, nil
 }
 
-func processImage(artworkId string, artworkUrl string, characterId string) *image.RGBA {
+func processImage(characterId string, artworkId int, artworkUrl string) *image.RGBA {
 	// Construct the path to the image file
-	imagePath := fmt.Sprintf("files/cards/%s.jpg", artworkId)
+	imageName := fmt.Sprintf("%s-%d", characterId, artworkId)
+	imagePath := fmt.Sprintf("files/cards/%s.jpg", imageName)
 	downloadMissingImage(imagePath, artworkUrl)
 	img, err := openImage(imagePath)
 
@@ -359,14 +367,12 @@ func ChooseWinners(session *discordgo.Session, cardsMessage *discordgo.Message, 
 	for i, card := range cards {
 		var winner DropWin
 		emoji := emojis[i]
-		cardID := card["doc"].(primitive.M)["artworkId"].(string)
-		winner.characterID = card["doc"].(primitive.M)["characterId"].(string)
+		winner.characterID = card["_id"].(string)
 		characterInfos, err := mongo.GetCharInfos(winner.characterID)
 		if err != nil {
 			log.Fatal(err)
 		}
 		winner.characterName = characterInfos["name"].(string)
-		winner.artworkID = cardID
 		users, err := getUsersWhoReacted(session, cardsMessage.ChannelID, cardsMessage.ID, emoji)
 		if err != nil {
 			log.Fatal(err)
@@ -404,8 +410,7 @@ func NotifyWinners(session *discordgo.Session, channelID string, winners []DropW
 func AddDropsToInventories(winners []DropWin) {
 	for _, dropWin := range winners {
 		userID := dropWin.winnerID
-		artworkID := dropWin.artworkID
 		characterID := dropWin.characterID
-		mongo.AddToInventory(userID, characterID, artworkID)
+		mongo.AddToInventory(userID, characterID, 1)
 	}
 }
