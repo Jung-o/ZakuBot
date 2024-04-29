@@ -6,6 +6,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
+	"time"
 )
 
 var client = NewMongoClient()
@@ -22,6 +23,7 @@ func RegisterUser(userID string, userName string) string {
 			userDoc = bson.M{
 				"userId": userID, "userName": userName, "money": 0,
 				"inventory": map[string]int{}, "wishlist": []string{},
+				"lastDropTime": int64(0),
 			}
 			_, err := usersColl.InsertOne(ctx, userDoc)
 			if err != nil {
@@ -121,4 +123,9 @@ func GetUser(userID string) (bson.M, error) {
 		return nil, err
 	}
 	return user, nil
+}
+
+func SetUserDropTimer(userId string) {
+	updatedTimerDoc := bson.M{"$set": bson.M{"lastDropTime": time.Now().Unix()}}
+	usersColl.UpdateOne(ctx, bson.M{"userId": userId}, updatedTimerDoc)
 }
