@@ -66,11 +66,11 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 
 	// respond to user message if it matches a case
 	switch message.Content {
-	case "zreg", "zregister":
+	case "zreg", "zregister", "Zreg", "Zregister":
 		response := commands.Register(message.Author.ID, message.Author.GlobalName)
 		session.ChannelMessageSend(message.ChannelID, response)
 
-	case "zd", "zdrop", "zdraw":
+	case "zd", "zdrop", "zdraw", "Zd", "Zdrop", "Zdraw":
 		//Make sure user is registered
 		if !commands.IsRegistered(message.Author.ID) {
 			session.ChannelMessageSend(message.ChannelID, "You must register first. Type `zreg` to register.")
