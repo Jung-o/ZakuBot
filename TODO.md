@@ -1,11 +1,5 @@
 # ZakuBot TODO
 
-## Functionality to Implement
-
-### `commands/zdraw.go`
-
-- [ ] CD between draws
-
 ## Files to Implement
 
 ### `commands/zcollection.go`
@@ -18,6 +12,7 @@
 - [ ] View card details
 - [ ] View all owners of a card
 - [ ] View all owners of an artwork
+- [ ] View last card dropped
 - [ ] Search card by name
 
 ### `commands/zgive.go`

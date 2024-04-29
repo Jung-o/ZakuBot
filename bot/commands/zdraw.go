@@ -414,3 +414,17 @@ func AddDropsToInventories(winners []DropWin) {
 		mongo.AddToInventory(userID, characterID, 1)
 	}
 }
+
+func GetUserDropTime(userId string) int64 {
+	user, _ := mongo.GetUser(userId)
+	return user["lastDropTime"].(int64)
+}
+
+func CanUserDrop(userId string) bool {
+	currentTime := time.Now().Unix()
+	lastUserDropTime := GetUserDropTime(userId)
+	if currentTime-lastUserDropTime < 300 {
+		return false
+	}
+	return true
+}

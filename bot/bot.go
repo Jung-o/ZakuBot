@@ -71,10 +71,27 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 		session.ChannelMessageSend(message.ChannelID, response)
 
 	case "zd", "zdrop", "zdraw":
-
 		//Make sure user is registered
 		if !commands.IsRegistered(message.Author.ID) {
 			session.ChannelMessageSend(message.ChannelID, "You must register first. Type `zreg` to register.")
+			return
+		}
+		// Check if last draw was less than 5 minutes ago
+		if !commands.CanUserDrop(message.Author.ID) {
+			lastDropTime := commands.GetUserDropTime(message.Author.ID)
+			currentTime := time.Now().Unix()
+			timeDiff := 300 - (currentTime - lastDropTime)
+			fmt.Println(timeDiff)
+			if timeDiff < 60 {
+				session.ChannelMessageSend(message.ChannelID,
+					fmt.Sprintf("<@%s> You can't drop right now, must wait %ds.", message.Author.ID, timeDiff))
+			} else {
+				amountMinutes := timeDiff / 60
+				amountSeconds := timeDiff - amountMinutes*60
+				session.ChannelMessageSend(message.ChannelID,
+					fmt.Sprintf("<@%s> You can't drop right now, must wait %dmin%ds.",
+						message.Author.ID, amountMinutes, amountSeconds))
+			}
 			return
 		}
 		cards, err := mongo.DrawCards()
@@ -107,7 +124,7 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 		}
 		// Track the message
 		trackedMessages[sentMessage.ID] = DropMessageInfo{MessageID: sentMessage.ID, UserID: message.Author.ID}
-
+		mongo.SetUserDropTimer(message.Author.ID)
 		time.AfterFunc(15*time.Second, func() {
 			delete(trackedMessages, sentMessage.ID)
 
