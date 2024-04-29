@@ -73,7 +73,8 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 	case "zd", "zdrop", "zdraw", "Zd", "Zdrop", "Zdraw":
 		//Make sure user is registered
 		if !commands.IsRegistered(message.Author.ID) {
-			session.ChannelMessageSend(message.ChannelID, "You must register first. Type `zreg` to register.")
+			session.ChannelMessageSend(message.ChannelID, fmt.Sprintf("<@%s> You must register first. Type `zreg` to register.",
+				message.Author.ID))
 			return
 		}
 		// Check if last draw was less than 5 minutes ago
@@ -144,7 +145,8 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 	case "zm", "zmoney", "Zm", "Zmoney":
 		//Make sure user is registered
 		if !commands.IsRegistered(message.Author.ID) {
-			session.ChannelMessageSend(message.ChannelID, "You must register first. Type `zreg` to register.")
+			session.ChannelMessageSend(message.ChannelID, fmt.Sprintf("<@%s> You must register first. Type `zreg` to register.",
+				message.Author.ID))
 			return
 		}
 		userMoney := commands.GetUserMoney(message.Author.ID)
