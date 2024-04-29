@@ -140,6 +140,16 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 			// Remove all reactions and change drop message
 			commands.MessageCleanup(session, sentMessage)
 		})
+
+	case "zm", "zmoney", "Zm", "Zmoney":
+		//Make sure user is registered
+		if !commands.IsRegistered(message.Author.ID) {
+			session.ChannelMessageSend(message.ChannelID, "You must register first. Type `zreg` to register.")
+			return
+		}
+		userMoney := commands.GetUserMoney(message.Author.ID)
+		session.ChannelMessageSend(message.ChannelID, fmt.Sprintf("<@%s> You have %d € in your balance.",
+			message.Author.ID, userMoney))
 	}
 }
 

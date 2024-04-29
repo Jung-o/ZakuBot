@@ -41,9 +41,6 @@
 - [ ] Buy timer resets from shop
 - [ ] Buy specific drop from shop
 
-### `commands/zmoney.go`
-
-- [ ] Check currency balance
 
 ## General Tasks
 
