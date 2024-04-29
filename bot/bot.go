@@ -67,7 +67,7 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 	// respond to user message if it matches a case
 	switch message.Content {
 	case "zreg", "zregister", "Zreg", "Zregister":
-		response := commands.Register(message.Author.ID, message.Author.GlobalName)
+		response := commands.Register(message.Author.ID, message.Author.GlobalName, message.Author.Username)
 		session.ChannelMessageSend(message.ChannelID, response)
 
 	case "zd", "zdrop", "zdraw", "Zd", "Zdrop", "Zdraw":
@@ -152,6 +152,16 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 		userMoney := commands.GetUserMoney(message.Author.ID)
 		session.ChannelMessageSend(message.ChannelID, fmt.Sprintf("<@%s> You have %d € in your balance.",
 			message.Author.ID, userMoney))
+
+	case "zv", "zview", "Zv", "Zview":
+		//Make sure user is registered
+		if !commands.IsRegistered(message.Author.ID) {
+			session.ChannelMessageSend(message.ChannelID, fmt.Sprintf("<@%s> You must register first. Type `zreg` to register.",
+				message.Author.ID))
+			return
+		}
+		lastCardDroppedEmbed := commands.ViewLastCardDropped(message.Author.ID)
+		_, _ = session.ChannelMessageSendComplex(message.ChannelID, &lastCardDroppedEmbed)
 	}
 }
 

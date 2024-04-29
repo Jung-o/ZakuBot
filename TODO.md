@@ -1,5 +1,11 @@
 # ZakuBot TODO
 
+## Functions to add
+
+### `commands/zview.go`
+
+- [ ] Search card by name
+
 ## Files to Implement
 
 ### `commands/zcollection.go`
@@ -7,13 +13,6 @@
 - [ ] List all cards in inventory (properly with pagination)
 - [ ] View collection of other user
 - [ ] Change artwork of a card
-
-### `commands/zview.go`
-- [ ] View card details
-- [ ] View all owners of a card
-- [ ] View all owners of an artwork
-- [ ] View last card dropped
-- [ ] Search card by name
 
 ### `commands/zgive.go`
 

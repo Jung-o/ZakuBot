@@ -2,8 +2,8 @@ package commands
 
 import "ZakuBot/mongo"
 
-func Register(userID string, userName string) string {
-	status := mongo.RegisterUser(userID, userName)
+func Register(userID string, viewName string, username string) string {
+	status := mongo.RegisterUser(userID, viewName, username)
 	return status
 }
 

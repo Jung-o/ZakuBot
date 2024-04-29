@@ -15,15 +15,15 @@ var usersColl = db.Collection("Users")
 var charactersColl = db.Collection("Characters")
 var artworksColl = db.Collection("Artworks")
 
-func RegisterUser(userID string, userName string) string {
+func RegisterUser(userID string, viewName string, userName string) string {
 	var userDoc bson.M
 	err := usersColl.FindOne(ctx, bson.M{"userId": userID}).Decode(&userDoc)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			userDoc = bson.M{
-				"userId": userID, "userName": userName, "money": 0,
+				"userId": userID, "viewName": viewName, "username": userName, "money": 0,
 				"inventory": map[string]int{}, "wishlist": []string{},
-				"lastDropTime": int64(0),
+				"lastDropTime": int64(0), "dropOrder": []string{},
 			}
 			_, err := usersColl.InsertOne(ctx, userDoc)
 			if err != nil {
@@ -34,7 +34,7 @@ func RegisterUser(userID string, userName string) string {
 			log.Fatal(err)
 		}
 	}
-	updatedUserDoc := bson.M{"$set": bson.M{"userName": userName}}
+	updatedUserDoc := bson.M{"$set": bson.M{"viewName": viewName}}
 	_, err = usersColl.UpdateOne(ctx, bson.M{"userId": userID}, updatedUserDoc)
 	return "User already exists"
 }
@@ -101,8 +101,9 @@ func AddToInventory(userID string, characterID string, artworkID int) {
 	}
 	// Add card with specific artwork ID to user's inventory
 	userFilter := bson.M{"userId": userID}
-	userUpdateDoc := bson.M{"$set": bson.M{"inventory." + characterID: artworkID}}
-	_, err = usersColl.UpdateOne(ctx, userFilter, userUpdateDoc)
+	updateInventoryDoc := bson.M{"$set": bson.M{"inventory." + characterID: artworkID},
+		"$push": bson.M{"dropOrder": characterID}}
+	_, err = usersColl.UpdateOne(ctx, userFilter, updateInventoryDoc)
 	if err != nil {
 		log.Fatal(err)
 	}
