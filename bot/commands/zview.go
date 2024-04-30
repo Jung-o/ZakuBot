@@ -11,20 +11,15 @@ import (
 
 func ViewLastCardDropped(userId string) discordgo.MessageSend {
 	user, _ := mongo.GetUser(userId)
-	dropOrderInterface := user["dropOrder"].(primitive.A)
-	if len(dropOrderInterface) == 0 {
+	cardInfo := mongo.GetLastCardDropped(userId)
+	if cardInfo == nil {
 		viewCardMessage := discordgo.MessageSend{
 			Content: fmt.Sprintf("<@%s> You have no cards in your inventory, go drop some with `zdrop`.", userId),
 		}
 		return viewCardMessage
 	}
-	cardsDropOrder := make([]string, len(dropOrderInterface))
-	for i, v := range dropOrderInterface {
-		cardsDropOrder[i] = v.(string)
-	}
-	charIdLastDrop := cardsDropOrder[len(cardsDropOrder)-1]
+	charIdLastDrop := cardInfo["characterId"].(string)
 	artworksSaved := user["inventory"].(primitive.M)[charIdLastDrop].(int32)
-	cardInfo, _ := mongo.GetCharInfos(charIdLastDrop)
 	artworkImage, err := openArtworkImage(charIdLastDrop, int(artworksSaved))
 	if err != nil {
 		viewCardMessage := discordgo.MessageSend{

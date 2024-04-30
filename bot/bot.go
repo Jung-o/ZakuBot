@@ -12,12 +12,18 @@ import (
 	"time"
 )
 
-type DropMessageInfo struct {
+type dropReactionInfo struct {
 	MessageID string
 	UserID    string
 }
+type burnReactionInfo struct {
+	MessageID string
+	UserID    string
+	CharID    []string
+}
 
-var trackedMessages = make(map[string]DropMessageInfo)
+var trackedDropMessages = make(map[string]dropReactionInfo)
+var trackedBurnMessages = make(map[string]burnReactionInfo)
 
 func Run(BotToken string) {
 
@@ -124,10 +130,10 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 			session.MessageReactionAdd(sentMessage.ChannelID, sentMessage.ID, emoji)
 		}
 		// Track the message
-		trackedMessages[sentMessage.ID] = DropMessageInfo{MessageID: sentMessage.ID, UserID: message.Author.ID}
+		trackedDropMessages[sentMessage.ID] = dropReactionInfo{MessageID: sentMessage.ID, UserID: message.Author.ID}
 		mongo.SetUserDropTimer(message.Author.ID)
 		time.AfterFunc(15*time.Second, func() {
-			delete(trackedMessages, sentMessage.ID)
+			delete(trackedDropMessages, sentMessage.ID)
 
 			// Remove bot reaction before drawing winners
 			for _, emoji := range emojis {
@@ -162,25 +168,72 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 		}
 		lastCardDroppedEmbed := commands.ViewLastCardDropped(message.Author.ID)
 		_, _ = session.ChannelMessageSendComplex(message.ChannelID, &lastCardDroppedEmbed)
+
+	case "zb", "zburn", "Zb", "Zburn":
+		//Make sure user is registered
+		if !commands.IsRegistered(message.Author.ID) {
+			session.ChannelMessageSend(message.ChannelID, fmt.Sprintf("<@%s> You must register first. Type `zreg` to register.",
+				message.Author.ID))
+			return
+		}
+		confirmationBurnMessage := commands.ConfirmationBurnLastCard(message.Author.ID)
+		sentMessage, _ := session.ChannelMessageSendComplex(message.ChannelID, &confirmationBurnMessage)
+		card := mongo.GetLastCardDropped(message.Author.ID)
+		charId := card["characterId"].(string)
+		// Add reactions to the message
+		emojis := []string{"👍", "👎"}
+		for _, emoji := range emojis {
+			session.MessageReactionAdd(sentMessage.ChannelID, sentMessage.ID, emoji)
+		}
+		// Track the message
+		trackedBurnMessages[sentMessage.ID] = burnReactionInfo{
+			MessageID: sentMessage.ID,
+			UserID:    message.Author.ID,
+			CharID:    []string{charId},
+		}
+		time.AfterFunc(15*time.Second, func() {
+			delete(trackedBurnMessages, sentMessage.ID)
+		})
 	}
 }
 
-func addedReaction(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
+func addedReaction(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	// Check if the reaction is made by the bot
-	if m.UserID == s.State.User.ID {
+	if r.UserID == s.State.User.ID {
 		return
 	}
-	// Check if the reaction is on a tracked message
-	_, ok := trackedMessages[m.MessageID]
-	if ok {
+	// Check if the reaction is on a tracked message for drop
+	_, okDrop := trackedDropMessages[r.MessageID]
+	if okDrop {
 		// Define the emojis
 		emojis := []string{"1️⃣", "2️⃣", "3️⃣"}
 
 		// Remove the other reactions
 		for _, emoji := range emojis {
-			if emoji != m.Emoji.Name {
-				s.MessageReactionRemove(m.ChannelID, m.MessageID, emoji, m.UserID)
+			if emoji != r.Emoji.Name {
+				s.MessageReactionRemove(r.ChannelID, r.MessageID, emoji, r.UserID)
 			}
+		}
+	}
+
+	// Check if the reaction is on a tracked message for drop
+	_, okBurn := trackedBurnMessages[r.MessageID]
+	if okBurn {
+		authorId := trackedBurnMessages[r.MessageID].UserID
+		// Don't consider emoji if not by author
+		if r.UserID != authorId {
+			s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
+			return
+		}
+		if r.Emoji.Name == "👍" {
+			cardsIds := trackedBurnMessages[r.MessageID].CharID
+			successText := commands.SuccessfullyBurnt(authorId, cardsIds)
+			s.ChannelMessageEdit(r.ChannelID, r.MessageID, successText)
+			delete(trackedBurnMessages, r.MessageID)
+		}
+		if r.Emoji.Name == "👎" {
+			s.ChannelMessageDelete(r.ChannelID, r.MessageID)
+			delete(trackedBurnMessages, r.MessageID)
 		}
 	}
 }
