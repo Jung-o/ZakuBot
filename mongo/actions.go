@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"time"
@@ -129,4 +130,50 @@ func GetUser(userID string) (bson.M, error) {
 func SetUserDropTimer(userId string) {
 	updatedTimerDoc := bson.M{"$set": bson.M{"lastDropTime": time.Now().Unix()}}
 	usersColl.UpdateOne(ctx, bson.M{"userId": userId}, updatedTimerDoc)
+}
+
+func GetLastCardDropped(userId string) bson.M {
+	user, _ := GetUser(userId)
+	dropOrderInterface := user["dropOrder"].(primitive.A)
+	if len(dropOrderInterface) == 0 {
+		return nil
+	}
+	cardsDropOrder := make([]string, len(dropOrderInterface))
+	for i, v := range dropOrderInterface {
+		cardsDropOrder[i] = v.(string)
+	}
+	charIdLastDrop := cardsDropOrder[len(cardsDropOrder)-1]
+	cardInfo, _ := GetCharInfos(charIdLastDrop)
+	return cardInfo
+}
+
+func RemoveCardFromInventory(userId string, characterId string) {
+	var userDoc bson.M
+	err := usersColl.FindOne(ctx, bson.M{"userId": userId}).Decode(&userDoc)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Remove card from user's inventory
+	userFilter := bson.M{"userId": userId}
+	updateInventoryDoc := bson.M{"$unset": bson.M{"inventory." + characterId: ""},
+		"$pull": bson.M{"dropOrder": characterId}}
+	usersColl.UpdateOne(ctx, userFilter, updateInventoryDoc)
+
+	// Remove user from card's owners
+	characterFilter := bson.M{"characterId": characterId}
+	characterUpdateDoc := bson.M{"$pull": bson.M{"owners": userId}}
+	charactersColl.UpdateOne(ctx, characterFilter, characterUpdateDoc)
+}
+
+func ChangeBalance(userId string, change int) {
+	user, _ := GetUser(userId)
+	currentBalance := user["money"].(int32)
+	newBalance := int(currentBalance) + change
+	userFilter := bson.M{"userId": userId}
+	updateBalanceDoc := bson.M{"$set": bson.M{"money": newBalance}}
+	_, err := usersColl.UpdateOne(ctx, userFilter, updateBalanceDoc)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
