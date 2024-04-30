@@ -6,6 +6,11 @@
 
 - [ ] Search card by name
 
+### `commands/zburn.go`
+
+- [ ] Burn all duplicates
+- [ ] Burn multiple cards at once
+
 ## Files to Implement
 
 ### `commands/zcollection.go`
@@ -28,12 +33,6 @@
 - [ ] Remove cards from wishlist
 - [ ] List all cards in wishlist
 - [ ] Get pinged if a card from wishlist drops
-
-### `commands/zburn.go`
-
-- [ ] Burn cards for currency
-- [ ] Burn all duplicates
-- [ ] Confirmation before burning
 
 ### `commands/zshop.go`
 
