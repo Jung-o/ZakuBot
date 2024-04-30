@@ -13,7 +13,25 @@ It uses a MongoDB database to access characters. It's based on the discordgo lib
 ```
 BOT_TOKEN=<YOUR_DISCORD_BOT_TOKEN>
 ```
-* The bot needs a MongoDB database running on localhost:27017
+
+#### MongoDB (localhost:27017)
+The Program needs two collections already filled.
+
+##### Characters
+```
+characterId: String
+name: String
+series: String
+owners: Array
+```
+
+##### Artworks
+```
+charName: String
+characterId: String
+artworkId: Int32
+```
+
 ### Executing program
 * Download all the dependencies
 ```
