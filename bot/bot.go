@@ -75,6 +75,7 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 	case "zreg", "zregister", "Zreg", "Zregister":
 		response := commands.Register(message.Author.ID, message.Author.GlobalName, message.Author.Username)
 		session.ChannelMessageSend(message.ChannelID, response)
+		return
 
 	case "zd", "zdrop", "zdraw", "Zd", "Zdrop", "Zdraw":
 		//Make sure user is registered
@@ -147,6 +148,7 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 			// Remove all reactions and change drop message
 			commands.MessageCleanup(session, sentMessage)
 		})
+		return
 
 	case "zm", "zmoney", "Zm", "Zmoney":
 		//Make sure user is registered
@@ -158,6 +160,7 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 		userMoney := commands.GetUserMoney(message.Author.ID)
 		session.ChannelMessageSend(message.ChannelID, fmt.Sprintf("<@%s> You have %d € in your balance.",
 			message.Author.ID, userMoney))
+		return
 
 	case "zv", "zview", "Zv", "Zview":
 		//Make sure user is registered
@@ -168,6 +171,7 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 		}
 		lastCardDroppedEmbed := commands.ViewLastCardDropped(message.Author.ID)
 		_, _ = session.ChannelMessageSendComplex(message.ChannelID, &lastCardDroppedEmbed)
+		return
 
 	case "zb", "zburn", "Zb", "Zburn":
 		//Make sure user is registered
@@ -194,6 +198,7 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 		time.AfterFunc(15*time.Second, func() {
 			delete(trackedBurnMessages, sentMessage.ID)
 		})
+		return
 	}
 }
 
