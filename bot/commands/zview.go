@@ -23,7 +23,7 @@ func ViewLastCardDropped(userId string) discordgo.MessageSend {
 	artworkImage, err := openArtworkImage(charIdLastDrop, int(artworksSaved))
 	if err != nil {
 		viewCardMessage := discordgo.MessageSend{
-			Content: "Error printing card",
+			Content: fmt.Sprintf("<@%s> Error printing card", userId),
 		}
 		return viewCardMessage
 	} else {
@@ -34,7 +34,8 @@ func ViewLastCardDropped(userId string) discordgo.MessageSend {
 		}
 		pingOwnersString := createUsernamesMessage(cardOwners)
 		viewCardMessage := discordgo.MessageSend{
-			Content: fmt.Sprintf("Name: %s", cardInfo["name"]) +
+			Content: fmt.Sprintf("<@%s>", userId) +
+				fmt.Sprintf("\nName: %s", cardInfo["name"]) +
 				fmt.Sprintf("\nSeries: %s", cardInfo["series"]) +
 				"\nOwners: " + pingOwnersString +
 				fmt.Sprintf("\nCharacter ID: %s", cardInfo["characterId"]),
