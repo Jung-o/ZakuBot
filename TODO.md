@@ -2,9 +2,6 @@
 
 ## Functions to add
 
-### `commands/zview.go`
-
-- [ ] Search card by name
 
 ### `commands/zburn.go`
 

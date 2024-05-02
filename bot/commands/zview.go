@@ -20,29 +20,76 @@ func ViewLastCardDropped(userId string) discordgo.MessageSend {
 	}
 	charIdLastDrop := cardInfo["characterId"].(string)
 	artworksSaved := user["inventory"].(primitive.M)[charIdLastDrop].(int32)
-	artworkImage, err := openArtworkImage(charIdLastDrop, int(artworksSaved))
+	response := viewCardMessage(cardInfo, int(artworksSaved))
+	newResponseContent := fmt.Sprintf("<@%s>\n", userId) + response.Content
+	response.Content = newResponseContent
+	return response
+}
+
+func viewCardMessage(cardInfo bson.M, artworkId int) discordgo.MessageSend {
+	charId := cardInfo["characterId"].(string)
+	artworkImage, err := openArtworkImage(charId, artworkId)
 	if err != nil {
-		viewCardMessage := discordgo.MessageSend{
-			Content: fmt.Sprintf("<@%s> Error printing card", userId),
+		response := discordgo.MessageSend{
+			Content: "Error printing card",
 		}
-		return viewCardMessage
-	} else {
-		cardOwnersInterface := cardInfo["owners"].(primitive.A)
-		cardOwners := make([]string, len(cardOwnersInterface))
-		for i, v := range cardOwnersInterface {
-			cardOwners[i] = v.(string)
-		}
-		pingOwnersString := createUsernamesMessage(cardOwners)
-		viewCardMessage := discordgo.MessageSend{
-			Content: fmt.Sprintf("<@%s>", userId) +
-				fmt.Sprintf("\nName: %s", cardInfo["name"]) +
-				fmt.Sprintf("\nSeries: %s", cardInfo["series"]) +
-				"\nOwners: " + pingOwnersString +
-				fmt.Sprintf("\nCharacter ID: %s", cardInfo["characterId"]),
-			Files: []*discordgo.File{artworkImage},
-		}
-		return viewCardMessage
+		return response
 	}
+	cardOwnersInterface := cardInfo["owners"].(primitive.A)
+	cardOwners := make([]string, len(cardOwnersInterface))
+	for i, v := range cardOwnersInterface {
+		cardOwners[i] = v.(string)
+	}
+	pingOwnersString := createUsernamesMessage(cardOwners)
+	response := discordgo.MessageSend{
+		Content: fmt.Sprintf("Name: %s", cardInfo["name"]) +
+			fmt.Sprintf("\nSeries: %s", cardInfo["series"]) +
+			"\nOwners: " + pingOwnersString +
+			fmt.Sprintf("\nCharacter ID: %s", cardInfo["characterId"]),
+		Files: []*discordgo.File{artworkImage},
+	}
+	return response
+}
+
+func ViewSpecifiedCard(userId string, searchFilter string) ([]discordgo.MessageSend, int) {
+	var matchingCardsMessages []discordgo.MessageSend
+	// try to find card by characterId
+	card, err := mongo.GetCharInfos(searchFilter)
+	if err == nil {
+		response := viewCardMessage(card, 1)
+		newResponseContent := fmt.Sprintf("<@%s>\n", userId) + response.Content
+		response.Content = newResponseContent
+		matchingCardsMessages = append(matchingCardsMessages, response)
+		return matchingCardsMessages, 1
+	}
+	// try to find card by its name
+	cards, err := mongo.SearchCardByName(searchFilter)
+	if err == nil {
+		for _, cardInfo := range cards {
+			response := viewCardMessage(cardInfo, 1)
+			newResponseContent := fmt.Sprintf("<@%s>\n", userId) + response.Content
+			response.Content = newResponseContent
+			matchingCardsMessages = append(matchingCardsMessages, response)
+		}
+		return matchingCardsMessages, len(cards)
+	}
+	// try to find card by its series
+	cards, err = mongo.SearchCardBySeries(searchFilter)
+	if err == nil {
+		for _, cardInfo := range cards {
+			response := viewCardMessage(cardInfo, 1)
+			newResponseContent := fmt.Sprintf("<@%s>\n", userId) + response.Content
+			response.Content = newResponseContent
+			matchingCardsMessages = append(matchingCardsMessages, response)
+		}
+		return matchingCardsMessages, len(cards)
+	}
+	// if no match then respond a fail
+	response := discordgo.MessageSend{
+		Content: fmt.Sprintf("<@%s>\n", userId) +
+			fmt.Sprintf("Couldn't find card matching `%s` criteria", searchFilter),
+	}
+	return []discordgo.MessageSend{response}, 0
 }
 
 func openArtworkImage(charId string, artworkId int) (*discordgo.File, error) {

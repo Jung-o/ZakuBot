@@ -1,7 +1,6 @@
 package mongo
 
 import (
-	"context"
 	"errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -80,13 +79,13 @@ func GetArtworkInfos(characterId string, artworkId int) (bson.M, error) {
 
 func GetAllArtworks(characterId string) ([]bson.M, error) {
 	var artworks []bson.M
-	cursor, err := artworksColl.Find(context.Background(), bson.M{"characterId": characterId})
+	cursor, err := artworksColl.Find(ctx, bson.M{"characterId": characterId})
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(ctx)
 
-	err = cursor.All(context.Background(), &artworks)
+	err = cursor.All(ctx, &artworks)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -176,4 +175,38 @@ func ChangeBalance(userId string, change int) {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func SearchCardByName(charName string) ([]bson.M, error) {
+	filter := bson.M{"name": bson.M{"$regex": charName}}
+	cursor, err := charactersColl.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	err = cursor.All(ctx, &results)
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func SearchCardBySeries(seriesName string) ([]bson.M, error) {
+	filter := bson.M{"series": bson.M{"$regex": seriesName}}
+	cursor, err := charactersColl.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	err = cursor.All(ctx, &results)
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }
