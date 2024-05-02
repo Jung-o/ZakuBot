@@ -50,7 +50,7 @@ func CombinedCardsFile(cards []bson.M) (string, error) {
 	defer file.Close()
 	combinedImg := combineDrawnCards(cards)
 	// Encode (write) the image to the file
-	if err := jpeg.Encode(file, combinedImg, nil); err != nil {
+	if err = jpeg.Encode(file, combinedImg, nil); err != nil {
 		panic(err)
 	}
 	return filepath, nil
@@ -146,21 +146,23 @@ func addLabel(img *image.RGBA, name string, series string) {
 func addVignetteBasedOnAverageColor(characterImage image.Image) (image.Image, error) {
 
 	// Calculate the average color of the character's image
-	var rTotal, gTotal, bTotal, count int64
+	var rTotal, gTotal, bTotal int64
+	imgSize := characterImage.Bounds().Size()
+	imgArea := int64(imgSize.X * imgSize.Y)
 	for y := characterImage.Bounds().Min.Y; y < characterImage.Bounds().Max.Y; y++ {
 		for x := characterImage.Bounds().Min.X; x < characterImage.Bounds().Max.X; x++ {
-			r, g, b, _ := characterImage.At(x, y).RGBA()
-			rTotal += int64(r)
-			gTotal += int64(g)
-			bTotal += int64(b)
-			count++
+			pixel := characterImage.At(x, y)
+			col := color.RGBAModel.Convert(pixel).(color.RGBA)
+			rTotal += int64(col.R)
+			gTotal += int64(col.G)
+			bTotal += int64(col.B)
 		}
 	}
 
 	averageColor := color.RGBA{
-		R: uint8(rTotal / count),
-		G: uint8(gTotal / count),
-		B: uint8(bTotal / count),
+		R: uint8(rTotal / imgArea),
+		G: uint8(gTotal / imgArea),
+		B: uint8(bTotal / imgArea),
 		A: 255,
 	}
 
