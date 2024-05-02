@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -21,9 +22,17 @@ type burnReactionInfo struct {
 	UserID    string
 	CharID    []string
 }
+type viewReactionInfo struct {
+	MessageID      string
+	UserID         string
+	Messages       []discordgo.MessageSend
+	amountMessages int
+	currentMessage int
+}
 
 var trackedDropMessages = make(map[string]dropReactionInfo)
 var trackedBurnMessages = make(map[string]burnReactionInfo)
+var trackedViewMessages = make(map[string]viewReactionInfo)
 
 func Run(BotToken string) {
 
@@ -183,6 +192,9 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 		confirmationBurnMessage := commands.ConfirmationBurnLastCard(message.Author.ID)
 		sentMessage, _ := session.ChannelMessageSendComplex(message.ChannelID, &confirmationBurnMessage)
 		card := mongo.GetLastCardDropped(message.Author.ID)
+		if card == nil {
+			return
+		}
 		charId := card["characterId"].(string)
 		// Add reactions to the message
 		emojis := []string{"👍", "👎"}
@@ -199,6 +211,40 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 			delete(trackedBurnMessages, sentMessage.ID)
 		})
 		return
+	}
+
+	// respond to user message if it's command + parameters
+	switch {
+	case strings.Contains(message.Content, "zv"):
+		//Make sure user is registered
+		if !commands.IsRegistered(message.Author.ID) {
+			session.ChannelMessageSend(message.ChannelID, fmt.Sprintf("<@%s> You must register first. Type `zreg` to register.",
+				message.Author.ID))
+			return
+		}
+		// array of zv, rest of message
+		parts := strings.SplitN(message.Content, " ", 2)
+		viewCardEmbeds, amount := commands.ViewSpecifiedCard(message.Author.ID, parts[1])
+		if amount <= 1 {
+			_, _ = session.ChannelMessageSendComplex(message.ChannelID, &viewCardEmbeds[0])
+		} else {
+			sentMessage, _ := session.ChannelMessageSendComplex(message.ChannelID, &viewCardEmbeds[0])
+			emojis := []string{"⬅️", "➡️"}
+			for _, emoji := range emojis {
+				session.MessageReactionAdd(sentMessage.ChannelID, sentMessage.ID, emoji)
+			}
+			// Track the message
+			trackedViewMessages[sentMessage.ID] = viewReactionInfo{
+				MessageID:      sentMessage.ID,
+				UserID:         message.Author.ID,
+				Messages:       viewCardEmbeds,
+				amountMessages: len(viewCardEmbeds),
+				currentMessage: 0,
+			}
+			time.AfterFunc(20*time.Second, func() {
+				delete(trackedViewMessages, sentMessage.ID)
+			})
+		}
 	}
 }
 
@@ -221,24 +267,60 @@ func addedReaction(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 		}
 	}
 
-	// Check if the reaction is on a tracked message for drop
+	// Check if the reaction is on a tracked message for burn
 	_, okBurn := trackedBurnMessages[r.MessageID]
 	if okBurn {
-		authorId := trackedBurnMessages[r.MessageID].UserID
+		messageEntry := trackedBurnMessages[r.MessageID]
+		authorId := messageEntry.UserID
 		// Don't consider emoji if not by author
 		if r.UserID != authorId {
 			s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
 			return
 		}
 		if r.Emoji.Name == "👍" {
-			cardsIds := trackedBurnMessages[r.MessageID].CharID
+			cardsIds := messageEntry.CharID
 			successText := commands.SuccessfullyBurnt(authorId, cardsIds)
 			s.ChannelMessageEdit(r.ChannelID, r.MessageID, successText)
+			s.MessageReactionsRemoveAll(r.ChannelID, r.MessageID)
 			delete(trackedBurnMessages, r.MessageID)
 		}
 		if r.Emoji.Name == "👎" {
 			s.ChannelMessageDelete(r.ChannelID, r.MessageID)
 			delete(trackedBurnMessages, r.MessageID)
+		}
+	}
+
+	// Check if the reaction is on a tracked message for view
+	_, okView := trackedViewMessages[r.MessageID]
+	if okView {
+		messageEntry := trackedViewMessages[r.MessageID]
+		authorId := messageEntry.UserID
+		// Don't consider reaction if not by author
+		if r.UserID != authorId {
+			s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
+			return
+		}
+		if r.Emoji.Name == "⬅️" {
+			currentMessage := messageEntry.currentMessage
+			if currentMessage == 0 {
+				s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
+			} else {
+				newMessage := messageEntry.Messages[currentMessage-1]
+				newContent := newMessage.Content
+				s.ChannelMessageEdit(r.ChannelID, r.MessageID, newContent)
+			}
+			return
+		}
+		if r.Emoji.Name == "➡️" {
+			currentMessage := messageEntry.currentMessage
+			if currentMessage == messageEntry.amountMessages-1 {
+				s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
+			} else {
+				newMessage := messageEntry.Messages[currentMessage+1]
+				newContent := newMessage.Content
+				s.ChannelMessageEdit(r.ChannelID, r.MessageID, newContent)
+			}
+			return
 		}
 	}
 }
