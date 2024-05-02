@@ -23,16 +23,17 @@ type burnReactionInfo struct {
 	CharID    []string
 }
 type viewReactionInfo struct {
-	MessageID      string
-	UserID         string
-	Messages       []discordgo.MessageSend
-	amountMessages int
-	currentMessage int
+	OriginalMessageID string
+	UserID            string
+	SearchFilter      string
+	amountMessages    int
+	currentMessage    int
 }
 
 var trackedDropMessages = make(map[string]dropReactionInfo)
 var trackedBurnMessages = make(map[string]burnReactionInfo)
 var trackedViewMessages = make(map[string]viewReactionInfo)
+var viewMessagesToDelete = make(map[string][]string)
 
 func Run(BotToken string) {
 
@@ -98,7 +99,6 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 			lastDropTime := commands.GetUserDropTime(message.Author.ID)
 			currentTime := time.Now().Unix()
 			timeDiff := 300 - (currentTime - lastDropTime)
-			fmt.Println(timeDiff)
 			if timeDiff < 60 {
 				session.ChannelMessageSend(message.ChannelID,
 					fmt.Sprintf("<@%s> You can't drop right now, must wait %ds.", message.Author.ID, timeDiff))
@@ -215,7 +215,7 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 
 	// respond to user message if it's command + parameters
 	switch {
-	case strings.Contains(message.Content, "zv"):
+	case strings.Contains(message.Content, "zv"), strings.Contains(message.Content, "Zv"):
 		//Make sure user is registered
 		if !commands.IsRegistered(message.Author.ID) {
 			session.ChannelMessageSend(message.ChannelID, fmt.Sprintf("<@%s> You must register first. Type `zreg` to register.",
@@ -235,14 +235,19 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 			}
 			// Track the message
 			trackedViewMessages[sentMessage.ID] = viewReactionInfo{
-				MessageID:      sentMessage.ID,
-				UserID:         message.Author.ID,
-				Messages:       viewCardEmbeds,
-				amountMessages: len(viewCardEmbeds),
-				currentMessage: 0,
+				OriginalMessageID: sentMessage.ID,
+				UserID:            message.Author.ID,
+				SearchFilter:      parts[1],
+				amountMessages:    len(viewCardEmbeds),
+				currentMessage:    0,
 			}
+			viewMessagesToDelete[sentMessage.ID] = []string{sentMessage.ID}
 			time.AfterFunc(20*time.Second, func() {
-				delete(trackedViewMessages, sentMessage.ID)
+				messagesToDelete := viewMessagesToDelete[sentMessage.ID]
+				for _, messageID := range messagesToDelete {
+					delete(trackedViewMessages, messageID)
+				}
+				delete(viewMessagesToDelete, sentMessage.ID)
 			})
 		}
 	}
@@ -302,23 +307,55 @@ func addedReaction(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 		}
 		if r.Emoji.Name == "⬅️" {
 			currentMessage := messageEntry.currentMessage
-			if currentMessage == 0 {
-				s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
+			if currentMessage != 0 {
+				newMessageIndex := currentMessage - 1
+				searchFilter := messageEntry.SearchFilter
+				viewCardEmbeds, _ := commands.ViewSpecifiedCard(r.UserID, searchFilter)
+				newMessage := viewCardEmbeds[newMessageIndex]
+				_ = s.ChannelMessageDelete(r.ChannelID, r.MessageID)
+				newSentMessage, _ := s.ChannelMessageSendComplex(r.ChannelID, &newMessage)
+				// track the new message
+				trackedViewMessages[newSentMessage.ID] = viewReactionInfo{
+					OriginalMessageID: messageEntry.OriginalMessageID,
+					UserID:            messageEntry.UserID,
+					SearchFilter:      searchFilter,
+					amountMessages:    messageEntry.amountMessages,
+					currentMessage:    messageEntry.currentMessage - 1,
+				}
+				viewMessagesToDelete[messageEntry.OriginalMessageID] = append(viewMessagesToDelete[messageEntry.OriginalMessageID], newSentMessage.ID)
+				emojis := []string{"⬅️", "➡️"}
+				for _, emoji := range emojis {
+					s.MessageReactionAdd(newSentMessage.ChannelID, newSentMessage.ID, emoji)
+				}
 			} else {
-				newMessage := messageEntry.Messages[currentMessage-1]
-				newContent := newMessage.Content
-				s.ChannelMessageEdit(r.ChannelID, r.MessageID, newContent)
+				s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
 			}
 			return
 		}
 		if r.Emoji.Name == "➡️" {
 			currentMessage := messageEntry.currentMessage
-			if currentMessage == messageEntry.amountMessages-1 {
-				s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
+			if currentMessage != messageEntry.amountMessages-1 {
+				newMessageIndex := currentMessage + 1
+				searchFilter := messageEntry.SearchFilter
+				viewCardEmbeds, _ := commands.ViewSpecifiedCard(r.UserID, searchFilter)
+				newMessage := viewCardEmbeds[newMessageIndex]
+				_ = s.ChannelMessageDelete(r.ChannelID, r.MessageID)
+				newSentMessage, _ := s.ChannelMessageSendComplex(r.ChannelID, &newMessage)
+				// track the new message
+				trackedViewMessages[newSentMessage.ID] = viewReactionInfo{
+					OriginalMessageID: messageEntry.OriginalMessageID,
+					UserID:            messageEntry.UserID,
+					SearchFilter:      searchFilter,
+					amountMessages:    messageEntry.amountMessages,
+					currentMessage:    messageEntry.currentMessage + 1,
+				}
+				viewMessagesToDelete[messageEntry.OriginalMessageID] = append(viewMessagesToDelete[messageEntry.OriginalMessageID], newSentMessage.ID)
+				emojis := []string{"⬅️", "➡️"}
+				for _, emoji := range emojis {
+					s.MessageReactionAdd(newSentMessage.ChannelID, newSentMessage.ID, emoji)
+				}
 			} else {
-				newMessage := messageEntry.Messages[currentMessage+1]
-				newContent := newMessage.Content
-				s.ChannelMessageEdit(r.ChannelID, r.MessageID, newContent)
+				s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
 			}
 			return
 		}

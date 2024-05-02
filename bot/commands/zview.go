@@ -41,12 +41,17 @@ func viewCardMessage(cardInfo bson.M, artworkId int) discordgo.MessageSend {
 		cardOwners[i] = v.(string)
 	}
 	pingOwnersString := createUsernamesMessage(cardOwners)
-	response := discordgo.MessageSend{
-		Content: fmt.Sprintf("Name: %s", cardInfo["name"]) +
-			fmt.Sprintf("\nSeries: %s", cardInfo["series"]) +
+	embedMessage := discordgo.MessageEmbed{
+		Type:  discordgo.EmbedTypeImage,
+		Title: cardInfo["name"].(string),
+		Description: fmt.Sprintf("Series: %s", cardInfo["series"]) +
 			"\nOwners: " + pingOwnersString +
 			fmt.Sprintf("\nCharacter ID: %s", cardInfo["characterId"]),
-		Files: []*discordgo.File{artworkImage},
+		Image: &discordgo.MessageEmbedImage{URL: "attachment://" + artworkImage.Name},
+	}
+	response := discordgo.MessageSend{
+		Embeds: []*discordgo.MessageEmbed{&embedMessage},
+		Files:  []*discordgo.File{artworkImage},
 	}
 	return response
 }
@@ -57,37 +62,39 @@ func ViewSpecifiedCard(userId string, searchFilter string) ([]discordgo.MessageS
 	card, err := mongo.GetCharInfos(searchFilter)
 	if err == nil {
 		response := viewCardMessage(card, 1)
-		newResponseContent := fmt.Sprintf("<@%s>\n", userId) + response.Content
+		newResponseContent := fmt.Sprintf("<@%s> 1 card matched your search.\n", userId) + response.Content
 		response.Content = newResponseContent
 		matchingCardsMessages = append(matchingCardsMessages, response)
 		return matchingCardsMessages, 1
 	}
 	// try to find card by its name
 	cards, err := mongo.SearchCardByName(searchFilter)
-	if err == nil {
+	amountMatched := len(cards)
+	if err == nil && amountMatched > 0 {
 		for _, cardInfo := range cards {
 			response := viewCardMessage(cardInfo, 1)
-			newResponseContent := fmt.Sprintf("<@%s>\n", userId) + response.Content
-			response.Content = newResponseContent
+			response.Content = fmt.Sprintf("<@%s> Found %d cards matching your criteria.",
+				userId, amountMatched)
 			matchingCardsMessages = append(matchingCardsMessages, response)
 		}
-		return matchingCardsMessages, len(cards)
+		return matchingCardsMessages, amountMatched
 	}
 	// try to find card by its series
 	cards, err = mongo.SearchCardBySeries(searchFilter)
-	if err == nil {
+	amountMatched = len(cards)
+	if err == nil && amountMatched > 0 {
 		for _, cardInfo := range cards {
 			response := viewCardMessage(cardInfo, 1)
-			newResponseContent := fmt.Sprintf("<@%s>\n", userId) + response.Content
-			response.Content = newResponseContent
+			response.Content = fmt.Sprintf("<@%s> Found %d cards matching your criteria.",
+				userId, amountMatched)
 			matchingCardsMessages = append(matchingCardsMessages, response)
 		}
-		return matchingCardsMessages, len(cards)
+		return matchingCardsMessages, amountMatched
 	}
 	// if no match then respond a fail
 	response := discordgo.MessageSend{
 		Content: fmt.Sprintf("<@%s>\n", userId) +
-			fmt.Sprintf("Couldn't find card matching `%s` criteria", searchFilter),
+			fmt.Sprintf("Couldn't find card matching `%s` criteria.", searchFilter),
 	}
 	return []discordgo.MessageSend{response}, 0
 }
