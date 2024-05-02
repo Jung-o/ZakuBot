@@ -178,7 +178,7 @@ func ChangeBalance(userId string, change int) {
 }
 
 func SearchCardByName(charName string) ([]bson.M, error) {
-	filter := bson.M{"name": bson.M{"$regex": charName}}
+	filter := bson.M{"name": bson.M{"$regex": charName, "$options": "i"}}
 	cursor, err := charactersColl.Find(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -195,7 +195,7 @@ func SearchCardByName(charName string) ([]bson.M, error) {
 }
 
 func SearchCardBySeries(seriesName string) ([]bson.M, error) {
-	filter := bson.M{"series": bson.M{"$regex": seriesName}}
+	filter := bson.M{"series": bson.M{"$regex": seriesName, "$options": "i"}}
 	cursor, err := charactersColl.Find(ctx, filter)
 	if err != nil {
 		return nil, err
