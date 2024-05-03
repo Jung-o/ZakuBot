@@ -5,16 +5,17 @@
 
 ### `commands/zburn.go`
 
-- [ ] Burn all duplicates
 - [ ] Burn multiple cards at once
 
 ## Files to Implement
 
-### `commands/zcollection.go`
+### `commands/zinventory.go`
 
 - [ ] List all cards in inventory (properly with pagination)
-- [ ] View collection of other user
-- [ ] Change artwork of a card
+- [ ] View inventory of other user
+
+### `commands/zartwork.go`
+- [ ] Change used artwork of a card
 
 ### `commands/zgive.go`
 
