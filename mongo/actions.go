@@ -78,7 +78,7 @@ func GetArtworkInfos(characterId string, artworkId int) (bson.M, error) {
 	return artwork, nil
 }
 
-func GetAllArtworks(characterId string) ([]bson.M, error) {
+func getAllArtworks(characterId string) ([]bson.M, error) {
 	var artworks []bson.M
 	cursor, err := artworksColl.Find(ctx, bson.M{"characterId": characterId})
 	if err != nil {
@@ -92,6 +92,11 @@ func GetAllArtworks(characterId string) ([]bson.M, error) {
 	}
 
 	return artworks, nil
+}
+
+func GetAmountArtworks(characterId string) (int, error) {
+	artworks, err := getAllArtworks(characterId)
+	return len(artworks), err
 }
 
 func AddToInventory(userID string, characterID string, artworkID int) {
