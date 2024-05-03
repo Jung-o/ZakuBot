@@ -29,11 +29,20 @@ type viewReactionInfo struct {
 	amountMessages    int
 	currentMessage    int
 }
+type artworkReactionInfo struct {
+	OriginalMessageID string
+	UserID            string
+	CharacterID       string
+	amountMessages    int
+	currentMessage    int
+}
 
 var trackedDropMessages = make(map[string]dropReactionInfo)
 var trackedBurnMessages = make(map[string]burnReactionInfo)
 var trackedViewMessages = make(map[string]viewReactionInfo)
 var viewMessagesToDelete = make(map[string][]string)
+var trackedArtworkMessages = make(map[string]artworkReactionInfo)
+var artworkMessagesToDelete = make(map[string][]string)
 
 func Run(BotToken string) {
 
@@ -250,6 +259,42 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 				delete(viewMessagesToDelete, sentMessage.ID)
 			})
 		}
+
+	case strings.Contains(message.Content, "za"), strings.Contains(message.Content, "Za"):
+		//Make sure user is registered
+		if !commands.IsRegistered(message.Author.ID) {
+			session.ChannelMessageSend(message.ChannelID, fmt.Sprintf("<@%s> You must register first. Type `zreg` to register.",
+				message.Author.ID))
+			return
+		}
+		// array of za, rest of message
+		parts := strings.SplitN(message.Content, " ", 2)
+		viewArtworksEmbeds, artworksAmount := commands.ViewAllCharArtworks(message.Author.ID, parts[1])
+		if artworksAmount <= 1 {
+			_, _ = session.ChannelMessageSendComplex(message.ChannelID, &viewArtworksEmbeds[0])
+		} else {
+			sentMessage, _ := session.ChannelMessageSendComplex(message.ChannelID, &viewArtworksEmbeds[0])
+			emojis := []string{"⬅️", "➡️"}
+			for _, emoji := range emojis {
+				session.MessageReactionAdd(sentMessage.ChannelID, sentMessage.ID, emoji)
+			}
+			// Track the message
+			trackedArtworkMessages[sentMessage.ID] = artworkReactionInfo{
+				OriginalMessageID: sentMessage.ID,
+				UserID:            message.Author.ID,
+				CharacterID:       parts[1],
+				amountMessages:    len(viewArtworksEmbeds),
+				currentMessage:    0,
+			}
+			artworkMessagesToDelete[sentMessage.ID] = []string{sentMessage.ID}
+			time.AfterFunc(20*time.Second, func() {
+				messagesToDelete := artworkMessagesToDelete[sentMessage.ID]
+				for _, messageID := range messagesToDelete {
+					delete(trackedViewMessages, messageID)
+				}
+				delete(artworkMessagesToDelete, sentMessage.ID)
+			})
+		}
 	}
 }
 
@@ -360,4 +405,71 @@ func addedReaction(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 			return
 		}
 	}
+
+	// Check if the reaction is on a tracked message for view
+	_, okArt := trackedArtworkMessages[r.MessageID]
+	if okArt {
+		messageEntry := trackedArtworkMessages[r.MessageID]
+		authorId := messageEntry.UserID
+		// Don't consider reaction if not by author
+		if r.UserID != authorId {
+			s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
+			return
+		}
+		if r.Emoji.Name == "⬅️" {
+			currentMessage := messageEntry.currentMessage
+			if currentMessage != 0 {
+				newMessageIndex := currentMessage - 1
+				charId := messageEntry.CharacterID
+				viewArtEmbeds, _ := commands.ViewAllCharArtworks(r.UserID, charId)
+				newMessage := viewArtEmbeds[newMessageIndex]
+				_ = s.ChannelMessageDelete(r.ChannelID, r.MessageID)
+				newSentMessage, _ := s.ChannelMessageSendComplex(r.ChannelID, &newMessage)
+				// track the new message
+				trackedArtworkMessages[newSentMessage.ID] = artworkReactionInfo{
+					OriginalMessageID: messageEntry.OriginalMessageID,
+					UserID:            messageEntry.UserID,
+					CharacterID:       charId,
+					amountMessages:    messageEntry.amountMessages,
+					currentMessage:    messageEntry.currentMessage - 1,
+				}
+				artworkMessagesToDelete[messageEntry.OriginalMessageID] = append(artworkMessagesToDelete[messageEntry.OriginalMessageID], newSentMessage.ID)
+				emojis := []string{"⬅️", "➡️"}
+				for _, emoji := range emojis {
+					s.MessageReactionAdd(newSentMessage.ChannelID, newSentMessage.ID, emoji)
+				}
+			} else {
+				s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
+			}
+			return
+		}
+		if r.Emoji.Name == "➡️" {
+			currentMessage := messageEntry.currentMessage
+			if currentMessage != messageEntry.amountMessages-1 {
+				newMessageIndex := currentMessage + 1
+				charId := messageEntry.CharacterID
+				viewArtEmbeds, _ := commands.ViewAllCharArtworks(r.UserID, charId)
+				newMessage := viewArtEmbeds[newMessageIndex]
+				_ = s.ChannelMessageDelete(r.ChannelID, r.MessageID)
+				newSentMessage, _ := s.ChannelMessageSendComplex(r.ChannelID, &newMessage)
+				// track the new message
+				trackedArtworkMessages[newSentMessage.ID] = artworkReactionInfo{
+					OriginalMessageID: messageEntry.OriginalMessageID,
+					UserID:            messageEntry.UserID,
+					CharacterID:       charId,
+					amountMessages:    messageEntry.amountMessages,
+					currentMessage:    messageEntry.currentMessage + 1,
+				}
+				artworkMessagesToDelete[messageEntry.OriginalMessageID] = append(artworkMessagesToDelete[messageEntry.OriginalMessageID], newSentMessage.ID)
+				emojis := []string{"⬅️", "➡️"}
+				for _, emoji := range emojis {
+					s.MessageReactionAdd(newSentMessage.ChannelID, newSentMessage.ID, emoji)
+				}
+			} else {
+				s.MessageReactionRemove(r.ChannelID, r.MessageID, r.Emoji.Name, r.UserID)
+			}
+			return
+		}
+	}
+
 }

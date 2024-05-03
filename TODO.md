@@ -7,15 +7,15 @@
 
 - [ ] Burn multiple cards at once
 
+### `commands/zartwork.go`
+- [ ] Change used artwork of a card
+
 ## Files to Implement
 
 ### `commands/zinventory.go`
 
 - [ ] List all cards in inventory (properly with pagination)
 - [ ] View inventory of other user
-
-### `commands/zartwork.go`
-- [ ] Change used artwork of a card
 
 ### `commands/zgive.go`
 
