@@ -41,6 +41,7 @@ func RegisterUser(userID string, viewName string, userName string) string {
 
 func DrawCards() ([]bson.M, error) {
 	pipeline := mongo.Pipeline{
+		{{"$match", bson.D{{"owned", false}}}},
 		{{"$group", bson.D{{"_id", "$characterId"}, {"doc", bson.D{{"$first", "$$ROOT"}}}}}},
 		{{"$sample", bson.D{{"size", 3}}}},
 	}
@@ -110,7 +111,7 @@ func AddToInventory(userID string, characterID string, artworkID int) {
 
 	// Add user to character's owners
 	characterFilter := bson.M{"characterId": characterID}
-	characterUpdateDoc := bson.M{"$push": bson.M{"owners": userID}}
+	characterUpdateDoc := bson.M{"$set": bson.M{"owner": userID, "owned": true}}
 	_, err = charactersColl.UpdateOne(ctx, characterFilter, characterUpdateDoc)
 	if err != nil {
 		log.Fatal(err)
@@ -161,7 +162,7 @@ func RemoveCardFromInventory(userId string, characterId string) {
 
 	// Remove user from card's owners
 	characterFilter := bson.M{"characterId": characterId}
-	characterUpdateDoc := bson.M{"$pull": bson.M{"owners": userId}}
+	characterUpdateDoc := bson.M{"$set": bson.M{"owner": "", "owned": false}}
 	charactersColl.UpdateOne(ctx, characterFilter, characterUpdateDoc)
 }
 
