@@ -17,6 +17,12 @@
 - [ ] List all cards in inventory (properly with pagination)
 - [ ] View inventory of other user
 
+### `commands/zprofile.go`
+- [ ] add stats (cards burned, total wishlist of cards owned, 3 top cards)
+
+### `commands/zleaderboards.go`
+- [ ] show leaderboards
+
 ### `commands/zgive.go`
 
 - [ ] Give cards to another user
