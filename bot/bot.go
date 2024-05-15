@@ -120,6 +120,7 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 			}
 			return
 		}
+		mongo.SetUserDropTimer(message.Author.ID)
 		cards, err := mongo.DrawCards()
 		if err != nil {
 			session.ChannelMessageSend(message.ChannelID, "Error drawing cards")
@@ -150,8 +151,7 @@ func receivedMessage(session *discordgo.Session, message *discordgo.MessageCreat
 		}
 		// Track the message
 		trackedDropMessages[sentMessage.ID] = dropReactionInfo{MessageID: sentMessage.ID, UserID: message.Author.ID}
-		mongo.SetUserDropTimer(message.Author.ID)
-		time.AfterFunc(15*time.Second, func() {
+		time.AfterFunc(30*time.Second, func() {
 			delete(trackedDropMessages, sentMessage.ID)
 
 			// Remove bot reaction before drawing winners
